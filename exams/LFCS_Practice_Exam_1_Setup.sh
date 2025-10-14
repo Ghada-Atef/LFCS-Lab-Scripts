@@ -1,6 +1,10 @@
 #!/bin/bash
 # =====================================================================
 # LFCS Practice Exam 1 – Environment Setup (Cross-Distro Safe Edition)
+# Version: 1.2 (October 2025)
+# Updates:
+#   - Fixed Task 2 (log-archive.service) with Type=oneshot & RemainAfterExit=yes
+#   - Added Task 4 jq installation check for RHEL 10 and Debian-based systems
 # =====================================================================
 
 set -e  # Exit immediately on critical error
@@ -57,11 +61,32 @@ chmod +x /usr/local/bin/log_archive.sh
 cat > /etc/systemd/system/log-archive.service <<'EOF'
 [Unit]
 Description=Log Archiving Service
+
 [Service]
+Type=oneshot
 ExecStart=/usr/local/bin/log_archive.sh
+RemainAfterExit=yes
+
 [Install]
 WantedBy=multi-user.target
 EOF
+
+# ---------------------------------------------------------------------
+# Task 4 – jq Installation Check
+# ---------------------------------------------------------------------
+echo "[*] Setting up for Task 4 – jq installation check..."
+if ! command -v jq >/dev/null 2>&1; then
+    echo "[*] jq not found — installing..."
+    if command -v dnf >/dev/null; then
+        sudo dnf install -y jq
+    elif command -v apt >/dev/null; then
+        sudo apt-get install -y jq
+    else
+        echo "⚠️  Package manager not detected. Please install jq manually."
+    fi
+else
+    echo "[*] jq is already installed. Skipping installation."
+fi
 
 # ---------------------------------------------------------------------
 # Task 5 – Cron Job Script
