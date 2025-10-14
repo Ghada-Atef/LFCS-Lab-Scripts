@@ -7,7 +7,7 @@ This repository provides:
 - Automated lab setup scripts for **Practice Exams 1–6**  
 - **Cross-distribution support** (RHEL, AlmaLinux, Rocky, Ubuntu)  
 - Built-in **error handling, device safety, and idempotency**  
-- Utility scripts for **lab cleanup** and **environment verification**
+- Utility scripts for **lab cleanup**
 
 ## 🧩 Usage
 
