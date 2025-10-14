@@ -64,7 +64,7 @@ Description=Log Archiving Service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/log_archive.sh
+ExecStart=/usr/bin/log_archive.sh
 RemainAfterExit=yes
 
 [Install]
