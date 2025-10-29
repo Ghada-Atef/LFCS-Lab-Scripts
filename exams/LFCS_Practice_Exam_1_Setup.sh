@@ -51,6 +51,9 @@ $PKG_INSTALL nfs-utils cifs-utils mdadm git nano nginx || true
 # Task 2 – Faulty Systemd Service
 # ---------------------------------------------------------------------
 echo "[*] Setting up for Task 2 – Faulty log-archive service..."
+echo "[*] NOTE: The ExecStart path intentionally points to /usr/bin/log_archive.sh"
+echo "[*]       while the script is installed to /usr/local/bin. This creates"
+echo "[*]       a controlled service start failure for the troubleshooting task."
 mkdir -p /usr/local/bin
 cat > /usr/local/bin/log_archive.sh <<'EOF'
 #!/bin/bash
@@ -62,6 +65,8 @@ cat > /etc/systemd/system/log-archive.service <<'EOF'
 [Unit]
 Description=Log Archiving Service
 
+# NOTE: ExecStart intentionally points to /usr/bin/log_archive.sh to create
+# a troubleshooting scenario. Students should verify path and permissions.
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/log_archive.sh
