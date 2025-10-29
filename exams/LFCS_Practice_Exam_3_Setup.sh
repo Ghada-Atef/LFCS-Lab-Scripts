@@ -85,7 +85,7 @@ rm -f /etc/sysconfig/my-app.conf
 # Task 7 – Port Redirection Simulation
 # ---------------------------------------------------------------------
 echo "[*] Task 7: Starting service listener on port 8080..."
-( while true; do echo -e "HTTP/1.1 200 OK\r\n\r\nService on 8080 OK" | nc -l -p 8080 -q 1; done ) &
+( while true; do echo -e "HTTP/1.1 200 OK\r\n\r\nService on 8080 OK" | nc -l -p 8080; done ) &
 
 # ---------------------------------------------------------------------
 # Task 8 – SSH Client Configuration
