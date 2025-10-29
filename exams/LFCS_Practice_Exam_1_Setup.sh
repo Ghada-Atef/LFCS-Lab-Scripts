@@ -94,20 +94,18 @@ else
 fi
 
 # ---------------------------------------------------------------------
-# Task 4 – jq Installation Check
+# Task 4 – jq Installation (Ensure jq is missing for the exercise)
 # ---------------------------------------------------------------------
-echo "[*] Setting up for Task 4 – jq installation check..."
-if ! command -v jq >/dev/null 2>&1; then
-    echo "[*] jq not found — installing..."
+echo "[*] Preparing Task 4 – jq package management test..."
+if command -v jq >/dev/null 2>&1; then
+    echo "[*] jq already installed — removing to simulate missing package scenario..."
     if command -v dnf >/dev/null; then
-        sudo dnf install -y jq
+        sudo dnf remove -y jq
     elif command -v apt >/dev/null; then
-        sudo apt-get install -y jq
-    else
-        echo "⚠️  Package manager not detected. Please install jq manually."
+        sudo apt remove -y jq
     fi
 else
-    echo "[*] jq is already installed. Skipping installation."
+    echo "[*] jq not detected — ready for installation test."
 fi
 
 # ---------------------------------------------------------------------
