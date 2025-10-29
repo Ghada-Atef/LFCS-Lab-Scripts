@@ -41,7 +41,14 @@ fi
 # Package Installation
 # ---------------------------------------------------------------------
 echo "[*] Installing required packages..."
-$PKG_INSTALL podman git nginx netcat-openbsd nfs-utils mdadm || true
+
+if [ "$DISTRO" = "rhel" ]; then
+    # RHEL packages
+    $PKG_INSTALL podman git nginx nmap-ncat nfs-utils mdadm || true
+elif [ "$DISTRO" = "debian" ]; then
+    # Debian/Ubuntu packages
+    $PKG_INSTALL podman git nginx netcat-openbsd nfs-kernel-server mdadm || true
+fi
 
 # ---------------------------------------------------------------------
 # Task 2 – Failed Container
