@@ -41,11 +41,6 @@ fi
 # Package Installation
 # ---------------------------------------------------------------------
 echo "[*] Installing required packages..."
-#$PKG_INSTALL podman git nginx netcat-openbsd nfs-utils mdadm || true
-# ---------------------------------------------------------------------
-# Package Installation
-# ---------------------------------------------------------------------
-echo "[*] Installing required packages..."
 
 if [ "$DISTRO" = "rhel" ]; then
     # RHEL packages
