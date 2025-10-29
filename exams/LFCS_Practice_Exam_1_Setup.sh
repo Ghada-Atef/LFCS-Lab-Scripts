@@ -77,6 +77,23 @@ WantedBy=multi-user.target
 EOF
 
 # ---------------------------------------------------------------------
+# Container Engine – Required for Task 3 (Podman)
+# ---------------------------------------------------------------------
+echo "[*] Checking container engine (podman)..."
+if ! command -v podman >/dev/null 2>&1; then
+    echo "[*] podman not found — installing..."
+    if command -v dnf >/dev/null 2>&1; then
+        sudo dnf install -y podman
+    elif command -v apt >/dev/null 2>&1; then
+        sudo apt install -y podman
+    else
+        echo "Unable to detect package manager. Please install podman manually."
+    fi
+else
+    echo "[*] podman already installed."
+fi
+
+# ---------------------------------------------------------------------
 # Task 4 – jq Installation Check
 # ---------------------------------------------------------------------
 echo "[*] Setting up for Task 4 – jq installation check..."
