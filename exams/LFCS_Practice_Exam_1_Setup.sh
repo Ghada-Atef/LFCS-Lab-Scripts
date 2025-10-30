@@ -153,16 +153,32 @@ sudo mkdir -p /etc/ssl/private
 sudo chmod 700 /etc/ssl/private
 
 # ---------------------------------------------------------------------
-# Task 20 – ACL Exercise
+# Task 20 – ACL Exercise (Final Unified Version)
 # ---------------------------------------------------------------------
 echo "[*] Setting up for Task 20 – ACL exercise..."
+
+# Ensure test user exists
 if ! id "temp_contractor" &>/dev/null; then
     useradd temp_contractor
 fi
-WEB_ROOT="/usr/share/nginx/html"
-[ -d /var/www/html ] && WEB_ROOT="/var/www/html"
-mkdir -p "$WEB_ROOT"
-echo "Default web page for ACL task" > "$WEB_ROOT/index.html"
+
+# Define preferred web root (cross-distro safe)
+WEB_ROOT="/var/www/html"
+ALT_ROOT="/usr/share/nginx/html"
+
+# Create both potential web roots for cross-compatibility
+sudo mkdir -p "$WEB_ROOT"
+sudo mkdir -p "$ALT_ROOT"
+
+# Ensure index file exists in both locations
+echo "Default web page for ACL task" | sudo tee "$WEB_ROOT/index.html" > /dev/null
+echo "Default web page for ACL task" | sudo tee "$ALT_ROOT/index.html" > /dev/null
+
+# Standardize ownership and permissions
+sudo chown root:root "$WEB_ROOT/index.html" "$ALT_ROOT/index.html"
+sudo chmod 644 "$WEB_ROOT/index.html" "$ALT_ROOT/index.html"
+
+echo "[✓] Web files prepared for ACL exercise."
 
 # ---------------------------------------------------------------------
 # Finalization
