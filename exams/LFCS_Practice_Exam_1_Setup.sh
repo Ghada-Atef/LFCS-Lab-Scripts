@@ -146,6 +146,13 @@ fallocate -l 60M /var/log/archive/old-archive.log || true
 touch -d "60 days ago" /var/log/archive/old-archive.log
 
 # ---------------------------------------------------------------------
+# Task 18 – SSL Directory Setup
+# ---------------------------------------------------------------------
+echo "[*] Ensuring /etc/ssl/private directory exists..."
+sudo mkdir -p /etc/ssl/private
+sudo chmod 700 /etc/ssl/private
+
+# ---------------------------------------------------------------------
 # Task 20 – ACL Exercise
 # ---------------------------------------------------------------------
 echo "[*] Setting up for Task 20 – ACL exercise..."
