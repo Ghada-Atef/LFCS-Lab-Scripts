@@ -2,11 +2,10 @@
 # =====================================================================
 # LFCS Practice Exam 2 – Environment Setup (Cross-Distro Safe Edition)
 # Version: 1.2 (2025-11-01)
-# - ADD: Interactive safety prompt; script will not run without user confirmation.
-# - Installs all dependencies for RHEL/Debian minimal installs
-# - FIX (Libvirt): Change type='kvm' to type='qemu' to bypass nested virtualization error
-# - FIX (LVM): Add "scorched earth" cleanup to handle stale LVM caches/devices
-# - FIX (LVM): Increase loop file to 3.1G to fix "insufficient space" error
+# - STUDENT-READY: Removed auto-completion for Tasks 15, 19, and 20.
+# - ADD: Interactive safety prompt.
+# - FIX (Libvirt): Change type='kvm' to type='qemu' to bypass nested virtualization.
+# - FIX (LVM): Add "scorched earth" cleanup and 3.1G file size.
 # =====================================================================
 
 set -euo pipefail
@@ -373,25 +372,16 @@ Task_14() { LOG_TS "[Task 14] iostat placeholder"; }
 # Task 15: cleanup.service
 # ----------------------------
 Task_15() {
-    LOG_TS "[Task 15] Create cleanup.service"
+    LOG_TS "[Task 15] Prepare cleanup.sh script"
+    # This task *only* creates the script.
+    # The student must create the systemd unit file.
     sudo mkdir -p /usr/local/bin
     sudo tee /usr/local/bin/cleanup.sh >/dev/null <<'EOF'
 #!/bin/bash
 echo "Cleanup service ran at $(date)" >> /tmp/cleanup_log.txt
 EOF
     sudo chmod +x /usr/local/bin/cleanup.sh
-    sudo tee /etc/systemd/system/cleanup.service >/dev/null <<'EOF'
-[Unit]
-Description=Cleanup Task Service
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/cleanup.sh
-[Install]
-WantedBy=multi-user.target
-EOF
-    sudo systemctl daemon-reload || true
-    sudo systemctl start cleanup.service || true
-    LOG_TS "cleanup.service created & started."
+    LOG_TS "Script /usr/local/bin/cleanup.sh created."
 }
 
 # ----------------------------
@@ -437,30 +427,27 @@ Task_18() {
 # Task 19: appsvc system user
 # ----------------------------
 Task_19() {
-    LOG_TS "[Task 19] Create appsvc"
-    if ! id appsvc >/dev/null 2>&1; then
-        sudo useradd --system --no-create-home --home-dir /opt/appsvc --shell /sbin/nologin appsvc || true
-    fi
+    LOG_TS "[Task 19] User 'appsvc' placeholder"
+    # This task is for the student to create the user.
+    # We only ensure the target home dir parent exists.
     sudo mkdir -p /opt/appsvc
-    sudo chown appsvc:appsvc /opt/appsvc || true
-    LOG_TS "appsvc created."
+    LOG_TS "Student must create the 'appsvc' user."
 }
 
 # ----------------------------
 # Task 20: nproc limits for developers
 # ----------------------------
 Task_20() {
-    LOG_TS "[Task 20] Configure nproc for @developers"
+    LOG_TS "[Task 20] Prepare 'developers' group"
+    # This task *only* creates the group.
+    # The student must add the nproc limit.
     if ! getent group developers >/dev/null 2>&1; then
         sudo groupadd developers || true
-    fi
-    if ! sudo grep -q '^@developers.*nproc' /etc/security/limits.conf 2>/dev/null; then
-        echo "@developers hard nproc 200" | sudo tee -a /etc/security/limits.conf >/dev/null
-        LOG_TS "Added limit to /etc/security/limits.conf"
+        LOG_TS "Group 'developers' created."
     else
-        LOG_TS "nproc limit already present."
+        LOG_TS "Group 'developers' already exists."
     fi
-    LOG_TS "Note: users must re-login for changes to apply."
+    LOG_TS "Student must apply the nproc limit."
 }
 
 # ----------------------------
