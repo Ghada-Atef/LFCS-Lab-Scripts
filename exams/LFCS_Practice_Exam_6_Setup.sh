@@ -3,7 +3,7 @@
 # LFCS Practice Exam 6 – Environment Setup (Cross-Distro Safe Edition)
 # =====================================================================
 
-set -euo pipefail
+set -e
 echo "==============================================================="
 echo "🔧 Starting environment setup for LFCS Practice Exam 6..."
 echo "==============================================================="
@@ -14,15 +14,13 @@ echo "==============================================================="
 if [ -f /etc/redhat-release ]; then
     DISTRO="rhel"
     PKG_INSTALL="sudo dnf install -y"
-    FIREWALL_CMD="firewall-cmd"
-    NOGROUP="nobody:nobody"
-    NFS_SERVICE="nfs-server"
+    VERIFY_PKG="dnf-plugins-core" # For 'dnf verify'
+    SEMANAGE_PKG="policycoreutils-python-utils"
 elif [ -f /etc/debian_version ]; then
     DISTRO="debian"
     PKG_INSTALL="sudo apt install -y"
-    FIREWALL_CMD="ufw"
-    NOGROUP="nobody:nogroup"
-    NFS_SERVICE="nfs-kernel-server"
+    VERIFY_PKG="debsums" # For 'debsums' (apt's alternative)
+    SEMANAGE_PKG="semanage-utils"
 else
     echo "⚠️  Unsupported distribution. Use RHEL/Alma/Rocky or Ubuntu."
     exit 1
@@ -30,190 +28,165 @@ fi
 echo "[*] Detected distribution: $DISTRO"
 
 # -------------------------
-# Basic pre-checks
+# Install minimal required packages
 # -------------------------
-if ! command -v systemctl >/dev/null 2>&1; then
-    echo "❌  systemd not detected. This lab requires systemd-based systems."
-    exit 1
-fi
+echo "[*] Installing required packages..."
+$PKG_INSTALL git openssl mdadm xfsprogs rsync netcat-openbsd \
+    podman $VERIFY_PKG $SEMANAGE_PKG nginx zip iotop sysstat \
+    chrony policycoreutils-python-utils || true
 
 # -------------------------
-# Install minimal required packages (best-effort)
+# Task 1 – Software Package Validation
 # -------------------------
-echo "[*] Installing required packages (best-effort)..."
-$PKG_INSTALL git openssl nmap-util mdadm xfsprogs rsync netcat-openbsd || true
+echo "[*] Task 1: Simulating 'coreutils' corruption..."
+# Intentionally change permissions on a core file to cause verification to fail
+chmod 700 /usr/bin/ls || true
 
 # -------------------------
-# Task 1 – Safe package/file-validation exercise
-# Instead of corrupting system binaries, create a safe test file to verify package checks.
+# Task 3 – Package Ownership
 # -------------------------
-echo "[*] Task 1: Preparing safe package/file verification scenario..."
-TEST_DIR="/opt/lfcs_verify"
-mkdir -p "$TEST_DIR"
-# create a benign file that the verification exercise can reference
-echo "This file simulates a modified package file for verification tasks." > "${TEST_DIR}/modified-file.txt"
-chmod 644 "${TEST_DIR}/modified-file.txt"
+echo "[*] Task 3: Ensuring 'zip' package is installed..."
+$PKG_INSTALL zip || true
+podman pull alpine >/dev/null 2>&1 || true
 
 # -------------------------
-# Task 2 – System Target Management
-# (Do NOT change default target; provide a safe copy and instructions)
+# Task 4 – SELinux Port Labeling
 # -------------------------
-echo "[*] Task 2: Preparing target-management exercise (non-destructive)..."
-# create a helper file indicating how to safely switch targets during exercise
-cat > "${TEST_DIR}/target_switch_instructions.txt" <<'EOF'
-Safe exercise: To test default target changes without affecting the base system,
-use 'systemctl isolate graphical.target' from a non-root user session OR create a transient unit.
-Do NOT permanently set-default in this lab unless you want the change persisted.
-EOF
+echo "[*] Task 4: Configuring Nginx to fail on non-standard port 8088..."
+# Modify Nginx to listen on port 8088, which is unlabeled by default
+sed -i 's/listen       80;/listen       8088;/g' /etc/nginx/nginx.conf || true
+sed -i 's/listen       \[::\]:80;/listen       \[::\]:8088;/g' /etc/nginx/nginx.conf || true
+# This restart is *expected* to fail on SELinux-enforcing systems
+systemctl restart nginx || echo "Nginx failed to start, as expected for Task 4."
 
 # -------------------------
-# Task 3 – Ensure zip package exists (or simulate)
+# Task 7 – Advanced Packet Filtering
 # -------------------------
-echo "[*] Task 3: Ensuring zip is available..."
-if ! command -v zip >/dev/null 2>&1; then
-    $PKG_INSTALL zip || true
-fi
-
-# -------------------------
-# Task 4 – SELinux user constraints exercise (create user)
-# -------------------------
-echo "[*] Task 4: Creating user 'intern_user' for SELinux exercise..."
-if ! id intern_user >/dev/null 2>&1; then
-    useradd -m intern_user || true
-fi
-
-# -------------------------
-# Task 7 – Add IP for advanced packet filtering test (if interface exists)
-# -------------------------
-echo "[*] Task 7: Adding example IP 198.51.100.10 to eth1 if present..."
-if ip link show eth1 >/dev/null 2>&1; then
+echo "[*] Task 7: Adding IP 198.51.100.10 to eth1 for rule testing..."
+if ip link show eth1 &>/dev/null; then
     ip addr add 198.51.100.10/24 dev eth1 || true
 else
     echo "⚠️  eth1 not present — skipping IP addition for Task 7."
 fi
 
 # -------------------------
-# Task 9 – Socket listener on a specific port for ss/sshd troubleshooting
+# Task 9 – Detailed Socket Investigation
 # -------------------------
 echo "[*] Task 9: Starting a listener on port 9988..."
 ( while true; do echo -e "HTTP/1.1 200 OK\r\n\r\n" | nc -l -p 9988 -q 1; done ) &
 
 # -------------------------
-# Task 11 – LVM management (create small VG if /dev/sdb1 exists)
+# Task 11 – LVM Management
 # -------------------------
-echo "[*] Task 11: Preparing LVM scenario if /dev/sdb exists..."
+echo "[*] Task 11: Preparing LVM setup for /dev/sdb..."
 if [ -b /dev/sdb ]; then
-    if ! vgs vg-main >/dev/null 2>&1; then
-        pvcreate /dev/sdb >/dev/null 2>&1 || true
-        vgcreate vg-main /dev/sdb >/dev/null 2>&1 || true
-    fi
-    # create a small partition if not present
-    if ! lvs vg-main/lv-test >/dev/null 2>&1; then
-        lvcreate -n lv-test -L 1G vg-main >/dev/null 2>&1 || true
-        mkfs.ext4 /dev/vg-main/lv-test >/dev/null 2>&1 || true
-        mkdir -p /mnt/lv-test && mount /dev/vg-main/lv-test /mnt/lv-test >/dev/null 2>&1 || true
-    fi
+    # Create /dev/sdb1 for vg-main
+    (echo n; echo p; echo 1; echo ; echo -5G; echo w) | fdisk /dev/sdb >/dev/null 2>&1 || true
+    # Create /dev/sdb2 as the spare partition for the task
+    (echo n; echo p; echo 2; echo ; echo ; echo w) | fdisk /dev/sdb >/dev/null 2>&1 || true
+    partprobe /dev/sdb || true
+    # Create the VG from only the first partition
+    pvcreate /dev/sdb1 || true
+    vgcreate vg-main /dev/sdb1 || true
 else
-    echo "⚠️  /dev/sdb not found — skipping LVM creation."
+    echo "⚠️  /dev/sdb not found — skipping LVM setup for Task 11."
 fi
 
 # -------------------------
-# Task 12 – Disk partitioning for /dev/sde (safe: only if block exists)
+# Task 12 – Disk Space Troubleshooting
 # -------------------------
-echo "[*] Task 12: Partition /dev/sde if present (safe checks)..."
+echo "[*] Task 12: Creating partition /dev/sde1..."
 if [ -b /dev/sde ]; then
-    # create single partition non-destructively if no partitions exist
-    if ! lsblk /dev/sde | grep -q sde1; then
-        (echo n; echo p; echo 1; echo; echo; echo w) | fdisk /dev/sde || true
-        partprobe || true
-    else
-        echo "⚠️  /dev/sde already partitioned — skipping fdisk."
-    fi
+    (echo n; echo p; echo 1; echo ; echo ; echo w) | fdisk /dev/sde >/dev/null 2>&1 || true
+    partprobe /dev/sde || true
+    # The partition is left unformatted for the student
 else
-    echo "⚠️  /dev/sde not found — skipping partitioning."
+    echo "⚠️  /dev/sde not found — skipping partition setup for Task 12."
 fi
 
 # -------------------------
-# Task 13 – I/O load generator (non-permanent, background)
+# Task 13 – Monitor I/O Performance
 # -------------------------
-echo "[*] Task 13: Starting a controlled background disk I/O generator (temporary)..."
-# run short dd in background to create measurable I/O without harming the system
-( dd if=/dev/zero of=/tmp/io_load.tmp bs=1M count=128 status=none && sleep 5 && rm -f /tmp/io_load.tmp ) &
+echo "[*] Task 13: Starting continuous background I/O..."
+( while true; do
+    dd if=/dev/zero of=/tmp/io_load.tmp bs=1M count=20 status=none
+    rm -f /tmp/io_load.tmp
+    sleep 1
+  done ) &
 
 # -------------------------
-# Task 14 – RAID array (create a degraded array only if devices exist)
+# Task 14 – RAID Array Recovery
 # -------------------------
-echo "[*] Task 14: Creating degraded RAID1 on available loop devices (safe mode)..."
-# Safe approach: create loop files and use them for RAID instead of real disks
-LOOP1="/tmp/raidloop1.img"
-LOOP2="/tmp/raidloop2.img"
-if [ ! -f "$LOOP1" ]; then
-    fallocate -l 50M "$LOOP1" || true
-fi
-if [ ! -f "$LOOP2" ]; then
-    fallocate -l 50M "$LOOP2" || true
-fi
-losetup -fP "$LOOP1" >/dev/null 2>&1 || true
-losetup -fP "$LOOP2" >/dev/null 2>&1 || true
-LO1=$(losetup -j "$LOOP1" | cut -d: -f1 || echo "")
-LO2=$(losetup -j "$LOOP2" | cut -d: -f1 || echo "")
-if [ -n "$LO1" ] && [ -n "$LO2" ]; then
-    mdadm --create /dev/md1 --level=1 --raid-devices=2 "$LO1" missing --force >/dev/null 2>&1 || true
-    # leave it degraded by design
-fi
-
-# -------------------------
-# Task 15 – Certificates (create private key and CSR)
-# -------------------------
-echo "[*] Task 15: Creating a test private key and self-signed cert..."
-mkdir -p /opt/lfcs_keys
-openssl genpkey -algorithm RSA -out /opt/lfcs_keys/server.key 2048 >/dev/null 2>&1 || true
-openssl req -x509 -new -nodes -key /opt/lfcs_keys/server.key -days 365 \
-    -subj "/CN=lfcs.local" -out /opt/lfcs_keys/server.crt >/dev/null 2>&1 || true
-
-# -------------------------
-# Task 17 – Git branch exercise
-# -------------------------
-echo "[*] Task 17: Preparing Git repo for rebase/merge exercises..."
-if [ -d /opt/lfcs_repo ]; then
-    cd /opt/lfcs_repo || true
+echo "[*] Task 14: Creating degraded /dev/md1 and spare /dev/sdc1..."
+if [ -b /dev/sdd ] && [ -b /dev/sdc ]; then
+    # Partition the disks
+    (echo n; echo p; echo 1; echo ; echo ; echo w) | fdisk /dev/sdd >/dev/null 2>&1 || true
+    (echo n; echo p; echo 1; echo ; echo ; echo w) | fdisk /dev/sdc >/dev/null 2>&1 || true
+    partprobe /dev/sdd || true
+    partprobe /dev/sdc || true
+    # Stop any old array
+    mdadm --stop /dev/md1 >/dev/null 2>&1 || true
+    mdadm --zero-superblock /dev/sdd1 >/dev/null 2>&1 || true
+    mdadm --zero-superblock /dev/sdc1 >/dev/null 2>&1 || true
+    # Create the new degraded array using only /dev/sdd1
+    mdadm --create /dev/md1 --level=1 --raid-devices=2 /dev/sdd1 missing --force || true
+    # This leaves /dev/sdc1 free for the student to add
 else
-    mkdir -p /opt/lfcs_repo
-    cd /opt/lfcs_repo
-    git init >/dev/null 2>&1 || true
-    echo "Initial" > file.txt
-    git add file.txt && git commit -m "Initial" || true
+    echo "⚠️  /dev/sdc or /dev/sdd not found — skipping RAID setup for Task 14."
 fi
-git checkout -b new-login-form >/dev/null 2>&1 || true
+
+# -------------------------
+# Task 15 – Certificate and Key Matching
+# -------------------------
+echo "[*] Task 15: Creating matching key/cert in /etc/pki/tls/..."
+mkdir -p /etc/pki/tls/{private,certs}
+openssl req -x509 -nodes -newkey rsa:2048 \
+ -keyout /etc/pki/tls/private/server.key \
+ -out /etc/pki/tls/certs/server.crt \
+ -days 365 -subj "/CN=lfcs.local" >/dev/null 2>&1 || true
+
+# -------------------------
+# Task 17 – Git Branch Management
+# -------------------------
+echo "[*] Task 17: Preparing Git repo for rebase exercise..."
+mkdir -p /opt/lfcs_repo
+cd /opt/lfcs_repo
+git init >/dev/null 2>&1
+git config --global user.email "lab@example.com"
+git config --global user.name "Lab User"
+echo "Initial" > file.txt
+git add file.txt && git commit -m "Initial" >/dev/null 2>&1
+git checkout -b new-login-form >/dev/null 2>&1
 echo "WIP on login form" > login.txt
-git add login.txt && git commit -m "Login form feature" || true
-git checkout main >/dev/null 2>&1 || true
+git add login.txt && git commit -m "Login form feature" >/dev/null 2>&1
+git checkout main >/dev/null 2>&1
 echo "Main update" > main_update.txt
-git add main_update.txt && git commit -m "Main update" || true
-git checkout new-login-form >/dev/null 2>&1 || true
-cd / || true
+git add main_update.txt && git commit -m "Main update" >/dev/null 2>&1
+git checkout new-login-form >/dev/null 2>&1
+cd /
 
 # -------------------------
-# Task 18 – Recent files simulation
+# Task 18 – File Searching and Archiving
 # -------------------------
-echo "[*] Task 18: Creating recently modified files in default user home..."
-DEFAULT_USER=$(logname 2>/dev/null || echo "root")
-mkdir -p "/home/${DEFAULT_USER}"
-touch "/home/${DEFAULT_USER}/report-$(date +%F).log"
-touch "/home/${DEFAULT_USER}/data.csv"
+echo "[*] Task 18: Creating recently modified files..."
+# Get the primary non-root user (UID 1000)
+DEFAULT_USER=$(id -un 1000 2>/dev/null || logname 2>/dev/null || echo "rocky")
+mkdir -p /home/$DEFAULT_USER
+touch /home/$DEFAULT_USER/recent_report.log
+touch /home/$DEFAULT_USER/old_file.log
+touch -d "2 days ago" /home/$DEFAULT_USER/old_file.log || true
 
 # -------------------------
-# Task 19 – Lock/unlock account exercise
+# Task 19 – User Account Management
 # -------------------------
-echo "[*] Task 19: Creating temp_worker user to lock/unlock..."
+echo "[*] Task 19: Creating user 'temp_worker'..."
 if ! id temp_worker >/dev/null 2>&1; then
     useradd -m temp_worker || true
-    # set password using chpasswd portable method
     echo "temp_worker:password" | chpasswd || true
 fi
 
 # -------------------------
-# Finalization: reload systemd and give summary
+# Finalization
 # -------------------------
 echo "[*] Finalizing and reloading systemd services..."
 systemctl daemon-reload || true
@@ -221,12 +194,6 @@ systemctl daemon-reload || true
 echo ""
 echo "==============================================================="
 echo "✅ LFCS Practice Exam 6 environment setup complete!"
-echo "Summary of notable actions:"
-echo " - Safe test files created under ${TEST_DIR}"
-echo " - I/O, listeners, and Git repo prepared"
-echo " - RAID simulated using loopback devices (degraded by design)"
-echo " - Certificates created under /opt/lfcs_keys"
-echo " - LVM/partitioning attempted only if block devices present"
 echo "==============================================================="
 echo "You can now proceed with the tasks in the LFCS Practice Exam 6."
 echo "==============================================================="
