@@ -12,20 +12,20 @@ echo "==============================================================="
 # Cross-Distribution Detection
 # ---------------------------------------------------------------------
 if [ -f /etc/redhat-release ]; then
-    DISTRO="rhel"
-    PKG_INSTALL="sudo dnf install -y"
-    FIREWALL_CMD="firewall-cmd"
-    NOGROUP="nobody:nobody"
-    NFS_SERVICE="nfs-server"
+    DISTRO="rhel"
+    PKG_INSTALL="sudo dnf install -y"
+    FIREWALL_CMD="firewall-cmd"
+    NOGROUP="nobody:nobody"
+    NFS_SERVICE="nfs-server"
 elif [ -f /etc/debian_version ]; then
-    DISTRO="debian"
-    PKG_INSTALL="sudo apt install -y"
-    FIREWALL_CMD="ufw"
-    NOGROUP="nobody:nogroup"
-    NFS_SERVICE="nfs-kernel-server"
+    DISTRO="debian"
+    PKG_INSTALL="sudo apt install -y"
+    FIREWALL_CMD="ufw"
+    NOGROUP="nobody:nogroup"
+    NFS_SERVICE="nfs-kernel-server"
 else
-    echo "⚠️ Unsupported distribution. Use RHEL, AlmaLinux, Rocky, or Ubuntu."
-    exit 1
+    echo "⚠️ Unsupported distribution. Use RHEL, AlmaLinux, Rocky, or Ubuntu."
+    exit 1
 fi
 echo "[*] Detected Linux Distribution: $DISTRO"
 
@@ -33,8 +33,8 @@ echo "[*] Detected Linux Distribution: $DISTRO"
 # Pre-Checks
 # ---------------------------------------------------------------------
 if ! command -v systemctl >/dev/null; then
-    echo "❌ systemd not detected. Aborting."
-    exit 1
+    echo "❌ systemd not detected. Aborting."
+    exit 1
 fi
 
 # ---------------------------------------------------------------------
@@ -56,7 +56,7 @@ chmod 755 /data/db || true
 # ---------------------------------------------------------------------
 echo "[*] Task 5: Creating faulty inventory.service scenario..."
 if ! id inv_user &>/dev/null; then
-    useradd inv_user || true
+    useradd inv_user || true
 fi
 mkdir -p /etc/inventory-app
 echo "[database]" > /etc/inventory-app/config.ini
@@ -79,16 +79,16 @@ EOF
 # ---------------------------------------------------------------------
 echo "[*] Task 7: Creating ssh_users group and jdoe user..."
 if ! getent group ssh_users >/dev/null; then
-    groupadd ssh_users || true
+    groupadd ssh_users || true
 fi
 if ! id jdoe &>/dev/null; then
-    if [ "$DISTRO" = "rhel" ]; then
-        useradd -m jdoe || true
-        echo "password" | passwd --stdin jdoe >/dev/null 2>&1 || true
-    else
-        useradd -m jdoe || true
-        echo "jdoe:password" | chpasswd || true
-    fi
+    if [ "$DISTRO" = "rhel" ]; then
+        useradd -m jdoe || true
+        echo "password" | passwd --stdin jdoe >/dev/null 2>&1 || true
+    else
+        useradd -m jdoe || true
+        echo "jdoe:password" | chpasswd || true
+    fi
 fi
 usermod -aG ssh_users jdoe || true
 
@@ -97,20 +97,20 @@ usermod -aG ssh_users jdoe || true
 # ---------------------------------------------------------------------
 echo "[*] Task 11: Creating lv-staging if /dev/sdb exists..."
 if [ -b /dev/sdb ]; then
-    if ! vgs vg-data &>/dev/null; then
-        pvcreate /dev/sdb || true
-        vgcreate vg-data /dev/sdb || true
-    fi
-    if ! lvs vg-data/lv-staging &>/dev/null; then
-        lvcreate -n lv-staging -L 10G vg-data || true
-        mkfs.ext4 /dev/vg-data/lv-staging || true
-        mkdir -p /mnt/staging
-        mount /dev/vg-data/lv-staging /mnt/staging || true
-    else
-        echo "⚠️ lv-staging already exists; skipping lvcreate."
-    fi
+    if ! vgs vg-data &>/dev/null; then
+        pvcreate /dev/sdb || true
+        vgcreate vg-data /dev/sdb || true
+    fi
+    if ! lvs vg-data/lv-staging &>/dev/null; then
+        lvcreate -n lv-staging -L 10G vg-data || true
+        mkfs.ext4 /dev/vg-data/lv-staging || true
+        mkdir -p /mnt/staging
+        mount /dev/vg-data/lv-staging /mnt/staging || true
+    else
+        echo "⚠️ lv-staging already exists; skipping lvcreate."
+    fi
 else
-    echo "⚠️ /dev/sdb not present — skipping LVM creation."
+    echo "⚠️ /dev/sdb not present — skipping LVM creation."
 fi
 
 # ---------------------------------------------------------------------
@@ -118,49 +118,49 @@ fi
 # ---------------------------------------------------------------------
 echo "[*] Task 12: Installing and configuring Samba..."
 if [ "$DISTRO" = "rhel" ]; then
-    $PKG_INSTALL samba || true
+    $PKG_INSTALL samba || true
 else
-    $PKG_INSTALL samba || true
+    $PKG_INSTALL samba || true
 fi
 
 mkdir -p /srv/sharedocs
 echo "This is a test file on the CIFS share." > /srv/sharedocs/test.txt
 if ! id winuser &>/dev/null; then
-    useradd winuser || true
+    useradd winuser || true
 fi
 # set Samba password non-interactively where possible
 if command -v smbpasswd >/dev/null; then
-    (echo "P@ssw0rd1"; echo "P@ssw0rd1") | smbpasswd -s -a winuser || true
+    (echo "P@ssw0rd1"; echo "P@ssw0rd1") | smbpasswd -s -a winuser || true
 fi
 
 cat > /etc/samba/smb.conf <<'EOF'
 [global]
-   workgroup = WORKGROUP
-   server string = Samba Server
-   security = user
+   workgroup = WORKGROUP
+   server string = Samba Server
+   security = user
 
 [sharedocs]
-   path = /srv/sharedocs
-   valid users = winuser
-   read only = no
+   path = /srv/sharedocs
+   valid users = winuser
+   read only = no
 EOF
 
 # add a secondary IP for Samba tests if eth1 exists
 if ip link show eth1 &>/dev/null; then
-    ip addr add 10.50.60.70/24 dev eth1 || true
+    ip addr add 10.50.60.70/24 dev eth1 || true
 fi
 
 # Start samba service safely
 if systemctl list-unit-files | grep -q samba; then
-    systemctl enable --now smb || systemctl enable --now samba || true
+    systemctl enable --now smb || systemctl enable --now samba || true
 fi
 
 # Add firewall rule
 if [ "$DISTRO" = "rhel" ]; then
-    $FIREWALL_CMD --permanent --add-service=samba || true
-    $FIREWALL_CMD --reload || true
+    $FIREWALL_CMD --permanent --add-service=samba || true
+    $FIREWALL_CMD --reload || true
 else
-    sudo ufw allow samba || true
+  m   sudo ufw allow samba || true
 fi
 
 # ---------------------------------------------------------------------
@@ -169,9 +169,9 @@ fi
 echo "[*] Task 13: Creating and mounting read-only filesystem..."
 mkdir -p /opt/data
 if [ -b /dev/sdb1 ]; then
-    mount -o ro /dev/sdb1 /opt/data || true
+Star    mount -o ro /dev/sdb1 /opt/data || true
 else
-    echo "⚠️ /dev/sdb1 not found — skipping read-only mount."
+    echo "⚠️ /dev/sdb1 not found — skipping read-only mount."
 fi
 
 # ---------------------------------------------------------------------
@@ -187,12 +187,12 @@ touch /var/www/html/cache/tmp.dat || true
 # ---------------------------------------------------------------------
 echo "[*] Task 16: Preparing git repo with history..."
 if [ ! -d "/opt/app-config" ]; then
-    git clone https://github.com/linux-foundation/lfcs-course.git /opt/app-config || true
+    git clone https://github.com/linux-foundation/lfcs-course.git /opt/app-config || true
 fi
 cd /opt/app-config || true
-echo -e "production:\n  adapter: postgres" > database.yml
+echo -e "production:\n  adapter: postgres" > database.yml
 git add database.yml && git commit -m "Initial DB config" || true
-echo -e "production:\n  adapter: mysql" > database.yml
+echo -e "production:\n  adapter: mysql" > database.yml
 git commit -am "Switch to MySQL" || true
 cd / || true
 
@@ -211,11 +211,10 @@ chmod +x /usr/local/bin/log-rotate.sh || true
 # ---------------------------------------------------------------------
 echo "[*] Task 20: Creating developers group & projects dir..."
 if ! getent group developers >/dev/null; then
-    groupadd developers || true
+I    groupadd developers || true
 fi
+# Create the directory, but leave ownership and permissions for the task
 mkdir -p /srv/projects
-chown root:developers /srv/projects || true
-chmod 2775 /srv/projects || true
 
 # ---------------------------------------------------------------------
 # Finalization
@@ -223,7 +222,7 @@ chmod 2775 /srv/projects || true
 echo "[*] Reloading systemd and finalizing..."
 systemctl daemon-reload || true
 if command -v exportfs >/dev/null; then
-    exportfs -ra || true
+    exportfs -ra || true
 fi
 
 echo ""
