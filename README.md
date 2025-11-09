@@ -9,9 +9,17 @@ This repository provides:
 - Built-in **error handling, device safety, and idempotency**  
 - Utility scripts for **lab cleanup**
 
-## 🧩 Usage
+## Usage
 
-### 1️⃣ Setup a Specific Lab
-Run the corresponding setup script for each exam (example for Exam 3):
+### Setup a Specific lab
+
+Run the corresponding setup script for each exam. To avoid potential "unbound variable" errors, it's highly recommended to download the script first and then execute it.
+
+**Example for Exam 3:**
+
 ```bash
-curl -s https://raw.githubusercontent.com/Ghada-Atef/LFCS-Lab-Scripts/main/exams/LFCS_Practice_Exam_3_Setup.sh | sudo bash
+# Download the script
+curl -o LFCS_Practice_Exam_3_Setup.sh [https://raw.githubusercontent.com/Ghada-Atef/LFCS-Lab-Scripts/main/exams/LFCS_Practice_Exam_3_Setup.sh](https://raw.githubusercontent.com/Ghada-Atef/LFCS-Lab-Scripts/main/exams/LFCS_Practice_Exam_3_Setup.sh)
+
+# Run the script
+sudo bash LFCS_Practice_Exam_3_Setup.sh
