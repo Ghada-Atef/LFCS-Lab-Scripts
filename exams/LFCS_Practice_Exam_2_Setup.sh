@@ -1,7 +1,7 @@
 #!/bin/bash
 # =====================================================================
 # LFCS Practice Exam 2 – Environment Setup (Cross-Distro Safe Edition)
-# (FINAL CORRECTED VERSION)
+# (FINAL v1.8 - Changes KVM domain type to QEMU for compatibility)
 # =====================================================================
 
 set -e
@@ -19,6 +19,11 @@ if [ -f /etc/redhat-release ]; then
     NOGROUP="nobody:nobody"
     NFS_SERVICE="nfs-server"
     SEMANAGE_PKG="policycoreutils-python-utils"
+    NETCAT_PKG="nmap-ncat"
+    NC_QUIT_FLAG=""
+    LIBVIRT_DAEMON="libvirt-daemon"
+    LIBVIRT_DRIVER_QEMU="libvirt-daemon-driver-qemu"
+    EMULATOR_PKG="qemu-kvm"
 elif [ -f /etc/debian_version ]; then
     DISTRO="debian"
     PKG_INSTALL="sudo apt install -y"
@@ -26,6 +31,11 @@ elif [ -f /etc/debian_version ]; then
     NOGROUP="nobody:nogroup"
     NFS_SERVICE="nfs-kernel-server"
     SEMANAGE_PKG="semanage-utils"
+    NETCAT_PKG="netcat-openbsd"
+    NC_QUIT_FLAG="-q 1"
+    LIBVIRT_DAEMON="libvirt-daemon-system"
+    LIBVIRT_DRIVER_QEMU="libvirt-daemon-driver-qemu"
+    EMULATOR_PKG="qemu-kvm"
 else
     echo " ⚠️  Unsupported distribution. Use RHEL, AlmaLinux, Rocky, or Ubuntu."
     exit 1
@@ -44,16 +54,20 @@ fi
 # Install Essential Packages
 # ---------------------------------------------------------------------
 echo "[*] Installing required tools..."
-$PKG_INSTALL nfs-utils git libvirt-client qemu-img mdadm nginx netcat-openbsd $SEMANAGE_PKG podman || true
+$PKG_INSTALL nfs-utils git libvirt-client $LIBVIRT_DAEMON $LIBVIRT_DRIVER_QEMU $EMULATOR_PKG qemu-img mdadm nginx $NETCAT_PKG $SEMANAGE_PKG podman || true
 
 # ---------------------------------------------------------------------
 # Task 1 – Libvirt VM Definition
 # ---------------------------------------------------------------------
-echo "[*] Task 1: Defining a minimal libvirt VM (dev-vm)..."
+echo "[*] Task 1: Enabling libvirtd service and defining VM (dev-vm)..."
+sudo systemctl enable --now libvirtd || echo "Warning: libvirtd service failed to start. Check virtualization support."
+echo "[*] Waiting 2 seconds for libvirt daemon to initialize..."
+sleep 2 
+
 mkdir -p /var/lib/libvirt/images
 if ! virsh list --all | grep -q dev-vm; then
     cat > /tmp/dev-vm.xml <<'EOF'
-<domain type="kvm">
+<domain type="qemu">
 <name>dev-vm</name>
 <memory unit="KiB">524288</memory>
 <vcpu placement="static">1</vcpu>
@@ -73,7 +87,7 @@ if ! virsh list --all | grep -q dev-vm; then
 </domain>
 EOF
     qemu-img create -f qcow2 /var/lib/libvirt/images/dev-vm.qcow2 1G || true
-    virsh define /tmp/dev-vm.xml || true
+    virsh -c qemu:///system define /tmp/dev-vm.xml || true
     rm -f /tmp/dev-vm.xml
 else
     echo " ⚠️  dev-vm already defined. Skipping."
@@ -100,7 +114,7 @@ fi
 # Task 8 – Reverse Proxy Backend
 # ---------------------------------------------------------------------
 echo "[*] Task 8: Starting backend listener on port 8080..."
-( while true; do echo -e "HTTP/1.1 200 OK\r\n\r\nBackend OK" | nc -l -p 8080 -q 1; done ) &
+( while true; do echo -e "HTTP/1.1 200 OK\r\n\r\nBackend OK" | nc -l -p 8080 $NC_QUIT_FLAG; done ) &
 
 # ---------------------------------------------------------------------
 # Task 10 – Network Troubleshooting Target
@@ -161,8 +175,9 @@ chmod +x /usr/local/bin/cleanup.sh
 # ---------------------------------------------------------------------
 echo "[*] Task 16: Setting up Git repository..."
 if [ ! -d "/opt/lfcs" ]; then
-    git clone https://github.com/linux-foundation/lfcs-course.git /opt/lfcs || true
+    git clone https://github.com/Ghada-Atef/LFCS-Lab-Scripts.git /opt/lfcs || true
 fi
+mkdir -p /opt/lfcs/config
 echo "# Accidental change by admin" >> /opt/lfcs/config/settings.conf || true
 
 # ---------------------------------------------------------------------
