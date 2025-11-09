@@ -1,6 +1,7 @@
 #!/bin/bash
 # =====================================================================
 # LFCS Practice Exam 3 – Environment Setup (Cross-Distro Safe Edition)
+# (FINAL v4 - Corrects Task 14 LVM logic)
 # =====================================================================
 
 set -e
@@ -17,12 +18,22 @@ if [ -f /etc/redhat-release ]; then
     FIREWALL_CMD="firewall-cmd"
     NOGROUP="nobody:nobody"
     NFS_SERVICE="nfs-server"
+    NETCAT_PKG="nmap-ncat"
+    NC_QUIT_FLAG=""
+    # RHEL's ncat syntax for listening on a specific IP is 'nc -l <host> <port>'
+    NC_LISTEN_CMD_1="nc -l 192.168.1.10 80"
+    NC_LISTEN_CMD_2="nc -l 192.168.1.11 80"
 elif [ -f /etc/debian_version ]; then
     DISTRO="debian"
     PKG_INSTALL="sudo apt install -y"
     FIREWALL_CMD="ufw"
     NOGROUP="nobody:nogroup"
     NFS_SERVICE="nfs-kernel-server"
+    NETCAT_PKG="netcat-openbsd"
+    NC_QUIT_FLAG="-q 1"
+    # Debian's nc syntax is 'nc -l -p <port> -s <host>'
+    NC_LISTEN_CMD_1="nc -l -p 80 -s 192.168.1.10 $NC_QUIT_FLAG"
+    NC_LISTEN_CMD_2="nc -l -p 80 -s 192.168.1.11 $NC_QUIT_FLAG"
 else
     echo "⚠️  Unsupported distribution. Use RHEL, AlmaLinux, Rocky, or Ubuntu."
     exit 1
@@ -41,7 +52,7 @@ fi
 # Package Installation
 # ---------------------------------------------------------------------
 echo "[*] Installing required packages..."
-$PKG_INSTALL podman git nginx netcat-openbsd nfs-utils mdadm || true
+$PKG_INSTALL podman git nginx $NETCAT_PKG nfs-utils mdadm || true
 
 # ---------------------------------------------------------------------
 # Task 2 – Failed Container
@@ -85,7 +96,7 @@ rm -f /etc/sysconfig/my-app.conf
 # Task 7 – Port Redirection Simulation
 # ---------------------------------------------------------------------
 echo "[*] Task 7: Starting service listener on port 8080..."
-( while true; do echo -e "HTTP/1.1 200 OK\r\n\r\nService on 8080 OK" | nc -l -p 8080 -q 1; done ) &
+( while true; do echo -e "HTTP/1.1 200 OK\r\n\r\nService on 8080 OK" | nc -l -p 8080 $NC_QUIT_FLAG; done ) &
 
 # ---------------------------------------------------------------------
 # Task 8 – SSH Client Configuration
@@ -104,37 +115,54 @@ grep -q "webapp" /etc/hosts || echo "192.168.254.254 webapp" >> /etc/hosts
 # Task 10 – Reverse Proxy Backends
 # ---------------------------------------------------------------------
 echo "[*] Task 10: Creating backend services on ports 80..."
-for i in 10 11; do
-    ip addr add 192.168.1.$i/24 dev eth1 2>/dev/null || true
-done
-( while true; do echo -e "HTTP/1.1 200 OK\r\n\r\nResponse from Backend-1" | nc -l -p 80 -s 192.168.1.10 -q 1; done ) &
-( while true; do echo -e "HTTP/1.1 200 OK\r\n\r\nResponse from Backend-2" | nc -l -p 80 -s 192.168.1.11 -q 1; done ) &
+if ip link show eth1 &>/dev/null; then
+    for i in 10 11; do
+        ip addr add 192.168.1.$i/24 dev eth1 2>/dev/null || true
+    done
+    ( while true; do echo -e "HTTP/1.1 200 OK\r\n\r\nResponse from Backend-1" | $NC_LISTEN_CMD_1; done ) &
+    ( while true; do echo -e "HTTP/1.1 200 OK\r\n\r\nResponse from Backend-2" | $NC_LISTEN_CMD_2; done ) &
+else
+    echo "⚠️  eth1 not found. Skipping listeners for Task 10."
+fi
 
 # ---------------------------------------------------------------------
-# Tasks 11-14 – Storage Configuration
+# Tasks 11-14 – Storage Configuration (Corrected Logic)
 # ---------------------------------------------------------------------
 echo "[*] Tasks 11-14: Preparing block devices..."
-for dev in /dev/sdb /dev/sdc /dev/sdd /dev/sde; do
-    [ -b "$dev" ] || echo "⚠️  Missing $dev, skipping."
-done
-if [ -b /dev/sdb ]; then
+
+# Task 11: /dev/sdb1 formatted
+if [ -b /dev/sdb ] && ! lsblk -no MOUNTPOINTS "/dev/sdb" | grep -q "/"; then
+    echo "[*] Configuring /dev/sdb for Task 11..."
     (echo n; echo p; echo 1; echo ; echo ; echo w) | fdisk /dev/sdb || true
     mkfs.ext4 /dev/sdb1 || true
 fi
-if [ -b /dev/sdc ]; then
+
+# Task 12: /dev/sdc1 mounted
+if [ -b /dev/sdc ] && ! lsblk -no MOUNTPOINTS "/dev/sdc" | grep -q "/"; then
+    echo "[*] Configuring /dev/sdc for Task 12..."
     (echo n; echo p; echo 1; echo ; echo ; echo w) | fdisk /dev/sdc || true
     mkfs.xfs /dev/sdc1 || true
     mkdir -p /mnt/legacy && mount /dev/sdc1 /mnt/legacy || true
 fi
-if [ -b /dev/sdd ]; then
+
+# Task 13: /dev/sdd1 partition exists
+# Task 14: vg-data exists (from /dev/sdd1), /dev/sde is free
+if [ -b /dev/sdd ] && ! lsblk -no MOUNTPOINTS "/dev/sdd" | grep -q "/"; then
+    echo "[*] Configuring /dev/sdd for Tasks 13 & 14..."
     (echo n; echo p; echo 1; echo ; echo ; echo w) | fdisk /dev/sdd || true
-fi
-if [ -b /dev/sde ]; then
+    
+    # Use /dev/sdd1 to create vg-data
     if ! vgs vg-data &>/dev/null; then
-        pvcreate /dev/sde || true
-        vgcreate vg-data /dev/sde || true
+        pvcreate /dev/sdd1 || true
+        vgcreate vg-data /dev/sdd1 || true
     fi
 fi
+
+# Task 14: /dev/sde is left free for the student
+if [ -b /dev/sde ]; then
+    echo "[*] /dev/sde is being left free for Task 14."
+fi
+# --- End of Corrected Storage Block ---
 
 # ---------------------------------------------------------------------
 # Task 15 – SSL Key Creation
@@ -149,10 +177,16 @@ openssl genpkey -algorithm RSA -out /opt/keys/server.key
 echo "[*] Task 16: Creating Git repo /opt/app-config..."
 mkdir -p /opt/app-config
 cd /opt/app-config
-git init
-touch initial.conf
-git add .
-git commit -m "Initial commit"
+if [ ! -d ".git" ]; then
+    git init
+    touch initial.conf
+    git add .
+    git config --global user.email "lab@example.com"
+    git config --global user.name "Lab User"
+    git commit -m "Initial commit"
+else
+    echo "⚠️  Git repo already exists. Skipping init."
+fi
 cd /
 
 # ---------------------------------------------------------------------
@@ -188,7 +222,6 @@ chown -R jdoe:jdoe /home/jdoe
 # ---------------------------------------------------------------------
 echo "[*] Reloading services..."
 systemctl daemon-reload || true
-exportfs -ra || true
 echo ""
 echo "==============================================================="
 echo "✅ LFCS Practice Exam 3 environment setup complete!"
